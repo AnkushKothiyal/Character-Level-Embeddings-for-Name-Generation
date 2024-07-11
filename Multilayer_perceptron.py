@@ -1,6 +1,7 @@
 """
 Script @author: Ankush
 Related research paper: https://www.jmlr.org/papers/volume3/bengio03a/bengio03a.pdf
+Special thanks to Andrej Karpathy for his lecture on this paper.
 """
 
 """
