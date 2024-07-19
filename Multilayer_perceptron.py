@@ -1,7 +1,6 @@
 """
 Script @author: Ankush
 Related research paper: https://www.jmlr.org/papers/volume3/bengio03a/bengio03a.pdf
-Special thanks to Andrej Karpathy for his lecture on this paper.
 """
 
 """
@@ -17,55 +16,36 @@ import torch
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import random
-from torch.nn import Dropout
+import MLP_helper
 
 g = torch.Generator().manual_seed(2147483647)
+random.seed(42)
 
 with open('names.txt', 'r') as f:
     words = f.read().splitlines()
 
-# build a vocublary of characters and mappings to/from integers
+# build a vocabulary of characters and mappings to/from integers
 chars = sorted(list(set(''.join(words))))
 stoi = {s:i+1 for i,s in enumerate(chars)}
 stoi['.'] = 0
 itos = {value:key for key,value in stoi.items()}
 
+# Create train, dev and test dataset based on the context length
 vocab_size = len(itos)
-block_size = 3  # the context length i.e. how many characters does the NN takes into account to predict the next character/token
-def build_dataset(words):
-  X, Y = [], []
-  for w in words:
-
-    #print(w)
-    context = [0] * block_size
-    for ch in w + '.':
-      ix = stoi[ch]
-      X.append(context)
-      Y.append(ix)
-      #print(''.join(itos[i] for i in context), '--->', itos[ix])
-      context = context[1:] + [ix] # crop and append
-
-  X = torch.tensor(X)
-  Y = torch.tensor(Y)
-  print(X.shape, Y.shape)
-  return X, Y
-
-
-random.seed(42)
+context_length = 3  # the context length i.e. how many characters does the NN takes into account to predict the next character/token
 random.shuffle(words)
 n1 = int(0.8*len(words))
 n2 = int(0.9*len(words))
-
-Xtr, Ytr = build_dataset(words[:n1])
-Xdev, Ydev = build_dataset(words[n1:n2])
-Xte, Yte = build_dataset(words[n2:])
+Xtr, Ytr = MLP_helper.build_dataset(words[:n1], stoi, context_length)
+Xdev, Ydev = MLP_helper.build_dataset(words[n1:n2], stoi, context_length)
+Xte, Yte = MLP_helper.build_dataset(words[n2:], stoi, context_length)
 
 # Hyperparameters
 lookup_dim = 8 # The size of the word embedding Matrix i.e. the dimension of the vectors to represent in each character/token
 neurons_hidden_layer = 110
 
 C = torch.randn(vocab_size,lookup_dim, generator=g)
-W1 = torch.randn((block_size*lookup_dim, neurons_hidden_layer), generator=g)
+W1 = torch.randn((context_length*lookup_dim, neurons_hidden_layer), generator=g)
 b1 = torch.randn(neurons_hidden_layer, generator=g)
 
 W2 = torch.randn((neurons_hidden_layer, neurons_hidden_layer), generator=g)
@@ -82,83 +62,35 @@ for p in NN_parameters:
 total_params = sum(p.nelement()  for p in NN_parameters)
 print("Total parameters in the NN are: ", total_params)
 
+Hyperparameters = [context_length, vocab_size, lookup_dim, neurons_hidden_layer]
+
+# training the neural network
 loss_array = []
 lr = 0.2
-n = 100000
+n = 10000
 for i in range(n):
 
-    #minibatch construct
-    batch_size = random.randint(100, 200)
-    ix = torch.randint(0, Xtr.shape[0],(batch_size,))
-
-    ## forward pass
-    emb = C[Xtr[ix]]     # Layer 1: The lookup matrix
-    h = torch.tanh(emb.view(-1, lookup_dim*block_size) @ W1 + b1)    # Layer 2: The hidden layer
-    h2 = torch.tanh(h @ W2 + b2)     # Layer 3: Second hidden layer
-    logits = h2 @ W3 + b3     # Layer 3: the output layer
-
-    loss = F.cross_entropy(logits, Ytr[ix])     # loss function
+    # forward pass
+    loss = MLP_helper.forward_pass(Xtr, Ytr, NN_parameters, Hyperparameters)
     loss_array.append(loss.item())
 
-
+    # print loss and adjust learning rate
     if i%(n/10) == 0:
         if i!=0: lr = round(lr/1.1,3)
         print(f"loss at step {i} = ",loss.item())
         print(f"Learning rate at step {i} = ",lr)
 
     ## backward pass
-    for p in NN_parameters:
-        p.grad = None
-    loss.backward() #backward propogation
-    for p in NN_parameters:
-        p.data += -lr * p.grad #updating
+    MLP_helper.backward_pass(NN_parameters, learning_rate=lr, loss=loss)
 
+# calculate loss on the three partitions of the data
+train_loss = MLP_helper.compute_loss(Xtr, Ytr, NN_parameters, Hyperparameters, "train")
+dev_loss = MLP_helper.compute_loss(Xdev, Ydev, NN_parameters, Hyperparameters, "dev")
+# test_loss = MLP_helper.compute_loss(Xtr, Ytr, NN_parameters, Hyperparameters, "test")
 
-# training loss 
-emb = C[Xtr]     # Layer 1: The lookup matrix
-h = torch.tanh(emb.view(-1, lookup_dim*block_size) @ W1 + b1)     # Layer 2: The hidden layer
-h2 = torch.tanh(h @ W2 + b2)
-logits = h2 @ W3 + b3  
-training_loss = F.cross_entropy(logits, Ytr)
-print("loss on train dataset = ", training_loss.item())
-
-# loss on train dataset
-emb = C[Xdev]     # Layer 1: The lookup matrix
-h = torch.tanh(emb.view(-1, lookup_dim*block_size) @ W1 + b1)     # Layer 2: The hidden layer
-h2 = torch.tanh(h @ W2 + b2)
-logits = h2 @ W3 + b3  
-dev_loss = F.cross_entropy(logits, Ydev)
-print("loss on dev dataset = ", dev_loss.item())
-
-
-torch.save(NN_parameters, 'nn_parameters_dev_216.pth')
-# loss on test dataset
-emb = C[Xte]     # Layer 1: The lookup matrix
-h = torch.tanh(emb.view(-1, lookup_dim*block_size) @ W1 + b1)     # Layer 2: The hidden layer
-h2 = torch.tanh(h @ W2 + b2)
-logits = h2 @ W3 + b3  
-test_loss = F.cross_entropy(logits, Yte)
-print("loss on test dataset = ", test_loss.item())
 
 # sample from the model
-g = torch.Generator().manual_seed(2147483647 + 10)
+N_samples = 10
+sample_names = MLP_helper.sample_from_model(N_samples, NN_parameters, Hyperparameters, itos)
 
-for _ in range(20):
-    
-    out = []
-    context = [0] * block_size # initialize with all ...
-    while True:
-      
-      emb = C[torch.tensor([context])]    
-      h = torch.tanh(emb.view(-1, lookup_dim*block_size) @ W1 + b1)
-      h2 = torch.tanh(h @ W2 + b2)
-      logits = h2 @ W3 + b3
-      probs = F.softmax(logits, dim=1) 
-      ix = torch.multinomial(probs, num_samples=1, generator=g).item()
-      context = context[1:] + [ix]
-      out.append(ix)
-      if ix == 0:
-        break
-    
-    print(''.join(itos[i] for i in out))
- 
+
