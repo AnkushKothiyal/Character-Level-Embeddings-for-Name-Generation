@@ -6,7 +6,7 @@ The dataset of a corpus of 32k names, it is divided into train, dev and test.
 - lookup_dim: The size of the word embedding matrix, representing the dimension of the vectors for each character/token.
 - neurons_hidden_layer: The number of neurons in the hidden layers of the neural network.
 - vocab_size: The total number of unique characters in the vocabulary.
-- block_size: The size of the context window used for character predictions.
+- context_length: The size of the context window used for character predictions.
 
 ## Model Architecture
 - Embedding Layer: A lookup matrix C is initialized to map each character to a vector of size lookup_dim.
@@ -24,7 +24,7 @@ The dataset of a corpus of 32k names, it is divided into train, dev and test.
 - Mini-Batch Construction: Randomly select a batch of training examples.
 - Forward and Backward Passes: Compute the loss and update the model parameters.
 - Learning Rate Decay: Gradually reduce the learning rate to improve training stability.
-- Checkpointing: Save the model parameters periodically.
+
 
 ## Performance Evaluation
 - Training Loss: Calculate the loss on the training dataset after training.
